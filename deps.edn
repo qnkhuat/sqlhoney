@@ -1,0 +1,22 @@
+{:paths ["src" "resources"]
+
+ :deps
+ {com.github.jsqlparser/jsqlparser {:mvn/version "4.7"}
+  com.github.seancorfield/honeysql {:mvn/version "2.5.1091"}}
+
+ :aliases
+ {; clj -M:dev
+  :dev
+  {:extra-deps  {cider/cider-nrepl   {:mvn/version "0.27.1"}
+                 hashp/hashp         {:mvn/version "0.2.1"}}
+   :jvm-opts  ["-Dun.run.mode=dev"
+               "-XX:-OmitStackTraceInFastThrow"]
+   :main-opts ["-e" "(use '[hashp.core])"
+               "-m" "nrepl.cmdline"
+               "--middleware" "[cider.nrepl/cider-middleware]"
+               "-i"]}
+
+  ; clj -T:build uberjar
+  :build
+  {:deps       {io.github.clojure/tools.build {:git/tag "v0.9.2" :git/sha "fe6b140"}}
+   :ns-default build}}}
