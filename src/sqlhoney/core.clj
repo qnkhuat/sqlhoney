@@ -2,42 +2,60 @@
   (:refer-clojure :exclude [format])
   (:require
    [honey.sql :as hsql]
-   [honey.sql.helpers :as hsql.helpers])
+   [honey.sql.helpers :as hsql.helpers]
+   [methodical.core :as m])
   (:import
    (net.sf.jsqlparser.parser CCJSqlParserUtil)
+   (net.sf.jsqlparser.schema
+    Column
+    Table)
    (net.sf.jsqlparser.statement.select
     AllColumns
     SelectItem
     PlainSelect)))
 
-#_(.getName (.getFromItem (CCJSqlParserUtil/parse "select * from orders;")))
+(m/defmulti jsql->honeysql
+  class)
 
-(.getSelectItems (CCJSqlParserUtil/parse "select * from orders;"))
+(m/defmethod jsql->honeysql :default
+  [obj]
+  (throw (ex-info (clojure.core/format "No implementation for %s" (class obj)) {:obj obj})))
 
-(defmulti jsql->honeysql
-  (fn [obj _query]
-    #pp _query
-    (class obj)))
+(m/defmethod jsql->honeysql PlainSelect
+  [^PlainSelect obj]
+  (merge
+   (when-let [selects (.getSelectItems obj)]
+     (apply hsql.helpers/select (map jsql->honeysql selects)))
+   (when-let [from (.getFromItem obj)]
+     (hsql.helpers/from #p (jsql->honeysql from)))))
 
-(defmethod jsql->honeysql PlainSelect
-  [obj query]
-  #p obj
-  (-> query
-      (hsql.helpers/select (map #(jsql->honeysql % query) (.getSelectItems obj)))))
+(m/defmethod jsql->honeysql SelectItem
+  [^SelectItem obj]
+  (let [expression (jsql->honeysql (.getExpression obj))]
+    (if-let [the-alias (.getAlias obj)]
+      [expression (.getName the-alias)]
+      expression)))
 
-(defmethod jsql->honeysql SelectItem
-  [obj query]
-  (jsql->honeysql (.getExpression obj) query))
-
-(defmethod jsql->honeysql AllColumns
-  [obj _query]
+(m/defmethod jsql->honeysql AllColumns
+  [^AllColumns obj]
   (str obj))
+
+(m/defmethod jsql->honeysql Column
+  [^Column obj]
+  (.getFullyQualifiedName obj true))
+
+(m/defmethod jsql->honeysql Table
+  [^Table obj]
+  (let [table-name (.getName obj)]
+    (if-let [the-alias (.getAlias obj)]
+      [table-name (.getName the-alias)]
+      table-name)))
 
 (defn format
   [query]
-  (jsql->honeysql #p (CCJSqlParserUtil/parse query) {}))
+  (#_methodical.util.trace/trace jsql->honeysql (CCJSqlParserUtil/parse query)))
 
-(str (.getExpression (first #p (.getSelectItems (CCJSqlParserUtil/parse "select * from orders;")))))
-(first (.getSelectItems (CCJSqlParserUtil/parse "select * from orders;")))
-
-(format "select * from orders")
+(try
+ (format "select id as a from orders")
+ (catch Exception e
+   e))

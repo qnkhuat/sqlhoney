@@ -7,8 +7,9 @@
  :aliases
  {; clj -M:dev
   :dev
-  {:extra-deps  {cider/cider-nrepl   {:mvn/version "0.27.1"}
-                 hashp/hashp         {:mvn/version "0.2.1"}}
+  {:extra-deps  {cider/cider-nrepl       {:mvn/version "0.27.1"}
+                 hashp/hashp             {:mvn/version "0.2.1"}
+                 org.clojure/tools.trace {:mvn/version "0.7.11"}}
    :jvm-opts  ["-Dun.run.mode=dev"
                "-XX:-OmitStackTraceInFastThrow"]
    :main-opts ["-e" "(use '[hashp.core])"
