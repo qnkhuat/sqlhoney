@@ -12,6 +12,7 @@
     StringValue
     Parenthesis
     JdbcParameter
+    NotExpression
     BinaryExpression)
    (net.sf.jsqlparser.expression.operators.arithmetic
     Addition)
@@ -97,6 +98,12 @@
   [(keyword (str/lower-case (.getStringExpression obj)))
    (jsql->honeysql (.getLeftExpression obj))
    (jsql->honeysql (.getRightExpression obj))])
+
+(m/defmethod jsql->honeysql NotExpression
+  [^NotExpression obj]
+  (if (.isExclamationMark obj)
+    [:! (jsql->honeysql (.getExpression obj))]
+    [:not (jsql->honeysql (.getExpression obj))]))
 
 (m/defmethod jsql->honeysql Parenthesis
   [^Parenthesis obj]
