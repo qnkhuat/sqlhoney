@@ -1,6 +1,7 @@
 (ns sqlhoney.core
-  (:refer-clojure :exclude [format #_defmethod])
+  (:refer-clojure :exclude [format])
   (:require
+   [clojure.string :as str]
    [methodical.core :as m]
    [honey.sql.helpers :as hsql.helpers])
   (:import
@@ -8,7 +9,15 @@
     DoubleValue
     NullValue
     LongValue
-    StringValue)
+    StringValue
+    Parenthesis
+    JdbcParameter
+    BinaryExpression)
+   (net.sf.jsqlparser.expression.operators.arithmetic
+    Addition)
+   (net.sf.jsqlparser.expression.operators.relational
+    ComparisonOperator
+    EqualsTo)
    (net.sf.jsqlparser.parser CCJSqlParserUtil)
    (net.sf.jsqlparser.schema
     Column
@@ -18,29 +27,25 @@
     SelectItem
     PlainSelect)))
 
+(def ^:dynamic *debug* false)
+
 (m/defmulti jsql->honeysql class)
-
-#_(defmacro m/defmethod
-    [name dispatch-val method-args & body]
-    `(do
-      (clojure.core/defmethod ~name ~dispatch-val
-        [& args#]
-        (when debug (println "IN" args#))
-        (let [result# (apply (fn [~@method-args] ~@body) args#)]
-          (when debug (println "OUT" result#))
-          result#))))
-
-
-(m/defmethod jsql->honeysql AllColumns
-  [^AllColumns obj]
-  (str obj))
 
 (defn- maybe-alias
   "Alias hsql-form if `obj` has an alias"
   [hsql-form obj]
   (if-let [the-alias (.getAlias obj)]
-    [hsql-form (.getName the-alias)]
+    [hsql-form (keyword (.getName the-alias))]
     hsql-form))
+
+(m/defmethod jsql->honeysql :around Object
+  [obj]
+  (when *debug*
+    (println "IN: jsql->honeysql: " (class obj) obj))
+  (let [result (next-method obj)]
+    (when *debug*
+      (println "OUT: jsql->honeysql: " (class obj) obj result))
+    result))
 
 (m/defmethod jsql->honeysql :default
   [obj]
@@ -51,14 +56,15 @@
   [^PlainSelect obj]
   (merge
    (when-let [selects (.getSelectItems obj)]
-     (def selects selects)
      (apply hsql.helpers/select (map jsql->honeysql selects)))
    (when-let [from (.getFromItem obj)]
-     (hsql.helpers/from (jsql->honeysql from)))))
+     (hsql.helpers/from (jsql->honeysql from)))
+   (when-let [where (.getWhere obj)]
+     (hsql.helpers/where (jsql->honeysql where)))))
 
 (m/defmethod jsql->honeysql AllColumns
-  [^AllColumns obj]
-  (str obj))
+  [^AllColumns _obj]
+  :*)
 
 (m/defmethod jsql->honeysql SelectItem
   [^SelectItem obj]
@@ -86,19 +92,38 @@
   [^NullValue _obj]
   nil)
 
+(m/defmethod jsql->honeysql BinaryExpression
+  [^BinaryExpression obj]
+  [(keyword (str/lower-case (.getStringExpression obj)))
+   (jsql->honeysql (.getLeftExpression obj))
+   (jsql->honeysql (.getRightExpression obj))])
+
+(m/defmethod jsql->honeysql Parenthesis
+  [^Parenthesis obj]
+  (jsql->honeysql (.getExpression obj)))
+
+;; net.sf.jsqlparser.expression.operators.arithmetic
+
+;; net.sf.jsqlparser.expression.operators.relational
+
+;; TODO: not really sure what's the use case here
+#_(m/defmethod jsql->honeysql JdbcParameter
+    [^JdbcParameter obj]
+    "?")
+
 ;; net.sf.jsqlparser.schema
+
 (m/defmethod jsql->honeysql Column
   [^Column obj]
-  (.getFullyQualifiedName obj true))
+  (keyword (.getFullyQualifiedName obj true)))
 
 (m/defmethod jsql->honeysql Table
   [^Table obj]
-  (maybe-alias (.getName obj) obj))
+  (maybe-alias (keyword (.getName obj)) obj))
 
 (defn format
   [query]
   (jsql->honeysql (CCJSqlParserUtil/parse query)))
-
 
 (comment
  (use 'clojure.tools.trace)
@@ -106,6 +131,7 @@
  (remove-all-methods jsql->honeysql)
 
  (try
-  (format "select 1 + 1")
+  (binding [*debug* true]
+   (format "select * from u where (id and 1) = 1"))
   (catch Exception e
     e)))
