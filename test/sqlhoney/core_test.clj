@@ -1,51 +1,71 @@
 (ns sqlhoney.core-test
   (:require
-   [honey.sql :as hsql]
    [clojure.test :refer [deftest is testing]]
+   [environ.core :refer [env]]
+   [next.jdbc :as jdbc]
+   [honey.sql :as hsql]
    [sqlhoney.core :as shoney]))
 
-(defmacro ^:private f
-  [query]
-  `(let [hsql-query# (shoney/format ~query)]
+(def ds (jdbc/get-datasource (env :sql-honey-connection-uri-test)))
+
+(defn sql->honey->sql
+  [sql]
+  (-> sql
+      shoney/format
+      hsql/format))
+
+(defmacro ^:private test-format
+  [query expected]
+  `(let [query#      ~query
+         hsql-query# (shoney/format query#)
+         raw-sql#    (hsql/format hsql-query#)]
      ;; test to see if we can convert from hsql to raw sql
-     (is (some? (hsql/format hsql-query#)))
-     hsql-query#))
+     (testing (format "query: %s "query#)
+       (is (some? raw-sql#))
+       #_(is (some? (jdbc/execute! ds raw-sql#)))
+       (is (= ~expected hsql-query#)))))
 
 (deftest simple-select-test
   (testing "select all"
-    (is (= {:select ["*"]
-            :from   ["users"]}
-           (f "select * from users")))
+    (test-format "select * from users"
+                 {:select ["*"]
+                  :from   ["users"]})
 
     (testing "from with alias"
-      (is (= {:select ["*"]
-              :from   [["users" "u"]]}
-             (f "select * from users as u")))))
+      (test-format "select * from users as u"
+                   {:select ["*"]
+                    :from   [["users" "u"]]})))
 
   (testing "single select"
-    (is (= {:select ["id"]
-            :from   ["users"]}
-           (f "select id from users")))
+    (test-format "select id from users"
+                 {:select ["id"]
+                  :from   ["users"]})
 
     (testing "with alias"
-      (is (= {:select [["first_name" "fname"]]
-              :from   ["users"]}
-             (f "select first_name as fname from users")))))
+      (test-format "select first_name as fname from users"
+                   {:select [["first_name" "fname"]]
+                    :from   ["users"]})))
 
   (testing "multiple select with alias"
-    (is (= {:select ["id" ["first_name" "fname"]]
-            :from   [["users" "u"]]}
-           (f "select id, first_name as fname from users as u")))))
+    (test-format "select id, first_name as fname from users as u"
+                 {:select ["id" ["first_name" "fname"]]
+                  :from   [["users" "u"]]})))
 
 (deftest select-expression-test
   (testing "simple"
-    (is (= {:select [1]}
-           (f "select 1")))
-    (is (= {:select [1.5]}
-           (f "select 1.5")))
-    (is (= {:select [1 2]}
-           (f "select 1, 2")))
-    (is (= {:select ["a"]}
-           (f "select 'a'")))
-    (is (= {:select [[1 "a"]]}
-           (f "select 1 as a")))))
+    (test-format "select 1"
+                 {:select [1]})
+    (test-format "select 1.5"
+                 {:select [1.5]})
+    (test-format "select 1, 2"
+                 {:select [1 2]})
+    (test-format "select 'a'"
+                 {:select ["a"]})
+    (test-format "select 1 as a"
+                 {:select [[1 "a"]]})
+    (test-format "select true"
+                 {:select [true]})
+    (test-format "select false"
+                 {:select [true]})
+    (test-format "select null"
+                 {:select [nil]})))

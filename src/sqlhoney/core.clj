@@ -1,9 +1,8 @@
 (ns sqlhoney.core
   (:refer-clojure :exclude [format #_defmethod])
   (:require
-   [honey.sql :as hsql]
-   [honey.sql.helpers :as hsql.helpers]
-   #_[methodical.core :as m])
+   [methodical.core :as m]
+   [honey.sql.helpers :as hsql.helpers])
   (:import
    (net.sf.jsqlparser.expression
     DoubleValue
@@ -19,9 +18,9 @@
     SelectItem
     PlainSelect)))
 
-(defmulti jsql->honeysql class)
+(m/defmulti jsql->honeysql class)
 
-#_(defmacro defmethod
+#_(defmacro m/defmethod
     [name dispatch-val method-args & body]
     `(do
       (clojure.core/defmethod ~name ~dispatch-val
@@ -32,7 +31,7 @@
           result#))))
 
 
-(defmethod jsql->honeysql AllColumns
+(m/defmethod jsql->honeysql AllColumns
   [^AllColumns obj]
   (str obj))
 
@@ -43,12 +42,12 @@
     [hsql-form (.getName the-alias)]
     hsql-form))
 
-(defmethod jsql->honeysql :default
+(m/defmethod jsql->honeysql :default
   [obj]
   (throw (ex-info (clojure.core/format "No implementation for %s" (class obj)) {:obj obj})))
 
 ;; net.sf.jsqlparser.statement.select
-(defmethod jsql->honeysql PlainSelect
+(m/defmethod jsql->honeysql PlainSelect
   [^PlainSelect obj]
   (merge
    (when-let [selects (.getSelectItems obj)]
@@ -57,34 +56,42 @@
    (when-let [from (.getFromItem obj)]
      (hsql.helpers/from (jsql->honeysql from)))))
 
-(defmethod jsql->honeysql AllColumns
+(m/defmethod jsql->honeysql AllColumns
   [^AllColumns obj]
   (str obj))
 
-(defmethod jsql->honeysql SelectItem
+(m/defmethod jsql->honeysql SelectItem
   [^SelectItem obj]
   (maybe-alias (jsql->honeysql (.getExpression obj)) obj))
 
 ;; net.sf.jsqlparser.expression
 
-(defmethod jsql->honeysql DoubleValue
+(m/defmethod jsql->honeysql DoubleValue
   [^DoubleValue obj]
   (.getValue obj))
 
-(defmethod jsql->honeysql LongValue
+(m/defmethod jsql->honeysql LongValue
   [^LongValue obj]
   (.getValue obj))
 
-(defmethod jsql->honeysql StringValue
+(m/defmethod jsql->honeysql StringValue
   [^StringValue obj]
-  (.getValue obj))
+  (let [value (.getValue obj)]
+    (case value
+      "true" true
+      "false" false
+      value)))
+
+(m/defmethod jsql->honeysql NullValue
+  [^NullValue _obj]
+  nil)
 
 ;; net.sf.jsqlparser.schema
-(defmethod jsql->honeysql Column
+(m/defmethod jsql->honeysql Column
   [^Column obj]
   (.getFullyQualifiedName obj true))
 
-(defmethod jsql->honeysql Table
+(m/defmethod jsql->honeysql Table
   [^Table obj]
   (maybe-alias (.getName obj) obj))
 
@@ -99,6 +106,6 @@
  (remove-all-methods jsql->honeysql)
 
  (try
-  (format "select 1 as a")
+  (format "select 1 + 1")
   (catch Exception e
     e)))
