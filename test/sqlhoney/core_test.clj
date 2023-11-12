@@ -80,7 +80,7 @@
   (test-format "select * from u where not id = 1" [:not [:= :id 1]] :where)
   (test-format "select * from u where ! id = 1" [:! [:= :id 1]] :where))
 
-(deftest binary-expression-test
+(deftest binary-expression-test ;; net.sf.jsqlparser.expression
   (testing "comparision"
     (test-format "select * from u where id > 1" [:> :id 1] :where)
     (test-format "select * from u where id >= 1" [:>= :id 1] :where)
@@ -97,14 +97,24 @@
       (test-format "select * from u where (id << 1) = 1" [:= [:<< :id 1] 1] :where)
       (test-format "select * from u where (id >> 1) = 1" [:= [:>> :id 1] 1] :where)))
   (testing "arithmetic"
+    ;; net.sf.jsqlparser.expression.operators.arithmetic
     (test-format "select * from u where (id + 1) = 2" [:= [:+ :id 1] 2] :where)
     (test-format "select * from u where (id / 2) = 2" [:= [:/ :id 2] 2] :where)
     (test-format "select * from u where (id * 2) = 2" [:= [:* :id 2] 2] :where)
     (test-format "select * from u where (id % 2) = 2" [:= [:% :id 2] 2] :where))
   (testing "conditional"
+    ;; net.sf.jsqlparser.expression.operators.conditional
     (test-format "select * from u where id > 1 and id < 3 " [:and [:> :id 1] [:< :id 3]] :where)
     (test-format "select * from u where id > 1 or id < 3 " [:or [:> :id 1] [:< :id 3]] :where)
     (test-format "select * from u where id > 1 xor id < 3 " [:xor [:> :id 1] [:< :id 3]] :where))
+  (testing "relational"
+    ;;net.sf.jsqlparser.expression.operators.relational
+    (test-format "select * from u where id between 1 and 10" [:between :id 1 10] :where)
+    (test-format "select * from u where id not between 1 and 10" [:not-between :id 1 10] :where)
+    (is (= ["SELECT * FROM u WHERE id NOT BETWEEN ? AND ?" 1 10]
+           (hsql/format (shoney/format "select * from u where id not between 1 and 10"))))
+    #_(test-format "select * from u where exists (select id from u where id > 10)" [:not-between :id 1 10] :where))
+
   (testing "binary expression in select returns 3 layers vector"
     (test-format "select 1 + 1" [[[:+ 1 1]]] :select))
   (testing "string"

@@ -3,6 +3,7 @@
   (:require
    [clojure.string :as str]
    [methodical.core :as m]
+   [honey.sql :as hsql]
    [honey.sql.helpers :as hsql.helpers])
   (:import
    (net.sf.jsqlparser.expression
@@ -17,15 +18,17 @@
    (net.sf.jsqlparser.expression.operators.arithmetic
     Addition)
    (net.sf.jsqlparser.expression.operators.relational
-    ComparisonOperator
-    EqualsTo)
+    Between
+    ExistsExpression)
    (net.sf.jsqlparser.parser CCJSqlParserUtil)
    (net.sf.jsqlparser.schema
     Column
     Table)
    (net.sf.jsqlparser.statement.select
     AllColumns
+    Select
     SelectItem
+    ParenthesedSelect
     PlainSelect)))
 
 (def ^:dynamic *debug* false)
@@ -45,6 +48,13 @@
     [hsql-form (keyword (.getName the-alias))]
     hsql-form))
 
+(defn- maybe-wrap-vector
+  "Forms like expression will need to be 3-level vectors in select"
+  [hsql-form]
+  (cond-> hsql-form
+    (= :select *context*)
+    vector))
+
 (m/defmethod jsql->honeysql :around Object
   [obj]
   (when *debug*
@@ -59,8 +69,8 @@
   (throw (ex-info (clojure.core/format "No implementation for %s" (class obj)) {:obj obj})))
 
 ;; net.sf.jsqlparser.statement.select
-(m/defmethod jsql->honeysql PlainSelect
-  [^PlainSelect obj]
+(m/defmethod jsql->honeysql Select
+  [^Select obj]
   (merge
    (when-let [selects (.getSelectItems obj)]
      (binding [*context* :select]
@@ -69,6 +79,17 @@
      (hsql.helpers/from (jsql->honeysql from)))
    (when-let [where (.getWhere obj)]
      (hsql.helpers/where (jsql->honeysql where)))))
+
+#_(m/defmethod jsql->honeysql ParenthesedSelect
+    [^PlainSelect obj]
+    #_(merge
+       (when-let [selects (.getSelectItems obj)]
+         (binding [*context* :select]
+           (apply hsql.helpers/select (map jsql->honeysql selects))))
+       (when-let [from (.getFromItem obj)]
+         (hsql.helpers/from (jsql->honeysql from)))
+       (when-let [where (.getWhere obj)]
+         (hsql.helpers/where (jsql->honeysql where)))))
 
 (m/defmethod jsql->honeysql AllColumns
   [^AllColumns _obj]
@@ -102,12 +123,9 @@
 
 (m/defmethod jsql->honeysql BinaryExpression
   [^BinaryExpression obj]
-  (cond-> [(keyword (str/lower-case (.getStringExpression obj)))
-           (jsql->honeysql (.getLeftExpression obj))
-           (jsql->honeysql (.getRightExpression obj))]
-    ;; expresison in select clause require 3 level vector
-    (= *context* :select)
-    vector))
+  (maybe-wrap-vector [(keyword (str/lower-case (.getStringExpression obj)))
+                      (jsql->honeysql (.getLeftExpression obj))
+                      (jsql->honeysql (.getRightExpression obj))]))
 
 (m/defmethod jsql->honeysql NotExpression
   [^NotExpression obj]
@@ -122,6 +140,27 @@
 ;; net.sf.jsqlparser.expression.operators.arithmetic
 
 ;; net.sf.jsqlparser.expression.operators.relational
+
+(hsql/register-fn! :not-between
+                   (fn [_ [x a b]]
+                     (let [[sql-x & params-x] (hsql/format-expr x {:nested true})
+                           [sql-a & params-a] (hsql/format-expr a {:nested true})
+                           [sql-b & params-b] (hsql/format-expr b {:nested true})]
+                       (-> [(str sql-x " NOT BETWEEN " sql-a " AND " sql-b)]
+                           (into params-x)
+                           (into params-a)
+                           (into params-b)))))
+
+(m/defmethod jsql->honeysql Between
+  [^Between obj]
+  [(if (.isNot obj) :not-between :between) (jsql->honeysql (.getLeftExpression obj))
+   (jsql->honeysql (.getBetweenExpressionStart obj)) (jsql->honeysql (.getBetweenExpressionEnd obj))])
+
+(m/defmethod jsql->honeysql ExistsExpression
+  [^ExistsExpression obj]
+  (maybe-wrap-vector [:exists (jsql->honeysql (.getRightExpression obj))]))
+
+
 
 ;; TODO: not really sure what's the use case here
 #_(m/defmethod jsql->honeysql JdbcParameter
@@ -145,10 +184,10 @@
 (comment
  (use 'clojure.tools.trace)
  (clojure.tools.trace/trace-ns *ns*)
- (remove-all-methods jsql->honeysql)
+ (m/remove-all-methods! #'jsql->honeysql)
 
  (try
   (binding [*debug* true]
-    (format "select 'sql' + 'honey'"))
+    (format "select * from u where exists (select id from u where id > 10)"))
   (catch Exception e
     e)))
