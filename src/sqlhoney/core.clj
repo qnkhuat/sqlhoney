@@ -149,6 +149,6 @@
 
  (try
   (binding [*debug* true]
-    (format "select * from u where (id and 1) = 1"))
+    (format "select 'sql' + 'honey'"))
   (catch Exception e
     e)))

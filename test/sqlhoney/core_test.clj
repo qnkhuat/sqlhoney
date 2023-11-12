@@ -106,4 +106,8 @@
     (test-format "select * from u where id > 1 or id < 3 " [:or [:> :id 1] [:< :id 3]] :where)
     (test-format "select * from u where id > 1 xor id < 3 " [:xor [:> :id 1] [:< :id 3]] :where))
   (testing "binary expression in select returns 3 layers vector"
-    (test-format "select 1 + 1" [[[:+ 1 1]]] :select)))
+    (test-format "select 1 + 1" [[[:+ 1 1]]] :select))
+  (testing "string"
+    (test-format "select 'sql' + 'honey'" [[[:+ "sql" "honey"]]] :select)
+    (test-format "select * from u where name like '%ngoc%'" [:like :name "%ngoc%"] :where)
+    (test-format "select * from u where name regexp 'ngoc.*'" [:regexp :name "ngoc.*"] :where)))
