@@ -43,8 +43,8 @@
 
 (defn- maybe-alias
   "Alias hsql-form if `obj` has an alias"
-  [hsql-form obj]
-  (if-let [the-alias (.getAlias obj)]
+  [hsql-form the-alias]
+  (if (some? the-alias)
     [hsql-form (keyword (.getName the-alias))]
     hsql-form))
 
@@ -71,25 +71,20 @@
 ;; net.sf.jsqlparser.statement.select
 (m/defmethod jsql->honeysql Select
   [^Select obj]
-  (merge
-   (when-let [selects (.getSelectItems obj)]
-     (binding [*context* :select]
-       (apply hsql.helpers/select (map jsql->honeysql selects))))
-   (when-let [from (.getFromItem obj)]
-     (hsql.helpers/from (jsql->honeysql from)))
-   (when-let [where (.getWhere obj)]
-     (hsql.helpers/where (jsql->honeysql where)))))
+  ;; make sure binding is nil to starts with for nested cases
+  (binding [*context* nil]
+   (merge
+    (when-let [selects (.getSelectItems obj)]
+      (binding [*context* :select]
+        (apply hsql.helpers/select (map jsql->honeysql selects))))
+    (when-let [from (.getFromItem obj)]
+      (hsql.helpers/from (jsql->honeysql from)))
+    (when-let [where (.getWhere obj)]
+      (hsql.helpers/where (jsql->honeysql where))))))
 
-#_(m/defmethod jsql->honeysql ParenthesedSelect
-    [^PlainSelect obj]
-    #_(merge
-       (when-let [selects (.getSelectItems obj)]
-         (binding [*context* :select]
-           (apply hsql.helpers/select (map jsql->honeysql selects))))
-       (when-let [from (.getFromItem obj)]
-         (hsql.helpers/from (jsql->honeysql from)))
-       (when-let [where (.getWhere obj)]
-         (hsql.helpers/where (jsql->honeysql where)))))
+(m/defmethod jsql->honeysql ParenthesedSelect
+  [^PlainSelect obj]
+  (maybe-alias (jsql->honeysql (.getSelect obj)) (.getAlias obj)))
 
 (m/defmethod jsql->honeysql AllColumns
   [^AllColumns _obj]
@@ -97,7 +92,7 @@
 
 (m/defmethod jsql->honeysql SelectItem
   [^SelectItem obj]
-  (maybe-alias (jsql->honeysql (.getExpression obj)) obj))
+  (maybe-alias (jsql->honeysql (.getExpression obj)) (.getAlias obj)))
 
 ;; net.sf.jsqlparser.expression
 
@@ -175,7 +170,7 @@
 
 (m/defmethod jsql->honeysql Table
   [^Table obj]
-  (maybe-alias (keyword (.getName obj)) obj))
+  (maybe-alias (keyword (.getName obj)) (.getAlias obj)))
 
 (defn format
   [query]
