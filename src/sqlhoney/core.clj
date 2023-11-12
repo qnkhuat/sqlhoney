@@ -30,6 +30,12 @@
 
 (def ^:dynamic *debug* false)
 
+(def ^{:dynamic true
+       :doc     "Which context the current form is in.
+                Could be :select"}
+  *context*
+  nil)
+
 (m/defmulti jsql->honeysql class)
 
 (defn- maybe-alias
@@ -57,7 +63,8 @@
   [^PlainSelect obj]
   (merge
    (when-let [selects (.getSelectItems obj)]
-     (apply hsql.helpers/select (map jsql->honeysql selects)))
+     (binding [*context* :select]
+       (apply hsql.helpers/select (map jsql->honeysql selects))))
    (when-let [from (.getFromItem obj)]
      (hsql.helpers/from (jsql->honeysql from)))
    (when-let [where (.getWhere obj)]
@@ -95,9 +102,12 @@
 
 (m/defmethod jsql->honeysql BinaryExpression
   [^BinaryExpression obj]
-  [(keyword (str/lower-case (.getStringExpression obj)))
-   (jsql->honeysql (.getLeftExpression obj))
-   (jsql->honeysql (.getRightExpression obj))])
+  (cond-> [(keyword (str/lower-case (.getStringExpression obj)))
+           (jsql->honeysql (.getLeftExpression obj))
+           (jsql->honeysql (.getRightExpression obj))]
+    ;; expresison in select clause require 3 level vector
+    (= *context* :select)
+    vector))
 
 (m/defmethod jsql->honeysql NotExpression
   [^NotExpression obj]
@@ -139,6 +149,6 @@
 
  (try
   (binding [*debug* true]
-   (format "select * from u where (id and 1) = 1"))
+    (format "select * from u where (id and 1) = 1"))
   (catch Exception e
     e)))
