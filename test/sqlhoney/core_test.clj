@@ -114,7 +114,12 @@
     (is (= ["SELECT * FROM u WHERE id NOT BETWEEN ? AND ?" 1 10]
            (hsql/format (shoney/format "select * from u where id not between 1 and 10"))))
     (test-format "select * from u where exists (select id from u where id > 10)"
-                 [:exists {:select [:id] :from [:u] :where [:> :id 10]}] :where))
+                 [:exists {:select [:id] :from [:u] :where [:> :id 10]}] :where)
+    (test-format "select * from u where id in (select id from a where id > 3)"
+                 [:in :id {:select [:id]
+                           :from   [:a]
+                           :where  [:> :id 3]}]
+                 :where))
 
   (testing "binary expression in select returns 3 layers vector"
     (test-format "select 1 + 1" [[[:+ 1 1]]] :select))
@@ -122,5 +127,11 @@
     (test-format "select 'sql' + 'honey'" [[[:+ "sql" "honey"]]] :select)
     (test-format "select * from u where name like '%ngoc%'" [:like :name "%ngoc%"] :where)
     (test-format "select * from u where name regexp 'ngoc.*'" [:regexp :name "ngoc.*"] :where)))
+
+(deftest nested-select-test
+ (test-format "select * from (select * from u) as s" {:select [:*]
+                                                      :from   [[{:select [:*]
+                                                                 :from   [:u]} :s]]}))
+
 
 ;; TODO: add more tests for nested select

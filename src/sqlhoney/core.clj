@@ -19,7 +19,8 @@
     Addition)
    (net.sf.jsqlparser.expression.operators.relational
     Between
-    ExistsExpression)
+    ExistsExpression
+    InExpression)
    (net.sf.jsqlparser.parser CCJSqlParserUtil)
    (net.sf.jsqlparser.schema
     Column
@@ -32,6 +33,10 @@
     PlainSelect)))
 
 (def ^:dynamic *debug* false)
+(def ^{:dynamic true
+       :private true
+       :doc     "Used to track indentation for debugging purposes"}
+  *recursive-level* 0)
 
 (def ^{:dynamic true
        :doc     "Which context the current form is in.
@@ -40,6 +45,8 @@
   nil)
 
 (m/defmulti jsql->honeysql class)
+
+(declare condas->)
 
 (defn- maybe-alias
   "Alias hsql-form if `obj` has an alias"
@@ -57,12 +64,14 @@
 
 (m/defmethod jsql->honeysql :around Object
   [obj]
-  (when *debug*
-    (println "IN: jsql->honeysql: " (class obj) obj))
-  (let [result (next-method obj)]
-    (when *debug*
-      (println "OUT: jsql->honeysql: " (class obj) obj result))
-    result))
+  (if *debug*
+    (let [indent (apply str (repeat *recursive-level* "  "))]
+      (println indent *recursive-level* "> IN:" obj)
+      (let [result (binding  [*recursive-level* (inc *recursive-level*)]
+                     (next-method obj))]
+        (println indent *recursive-level* "< OUT:" (class obj) result)
+        result))
+    (next-method obj)))
 
 (m/defmethod jsql->honeysql :default
   [obj]
@@ -73,14 +82,17 @@
   [^Select obj]
   ;; make sure binding is nil to starts with for nested cases
   (binding [*context* nil]
-   (merge
-    (when-let [selects (.getSelectItems obj)]
+    #_{:clj-kondo/ignore [:unresolved-symbol]}
+    (condas-> {} query
+      (some? (.getSelectItems obj))
       (binding [*context* :select]
-        (apply hsql.helpers/select (map jsql->honeysql selects))))
-    (when-let [from (.getFromItem obj)]
-      (hsql.helpers/from (jsql->honeysql from)))
-    (when-let [where (.getWhere obj)]
-      (hsql.helpers/where (jsql->honeysql where))))))
+        (apply hsql.helpers/select query (map jsql->honeysql (.getSelectItems obj))))
+
+      (some? (.getFromItem obj))
+      (hsql.helpers/from query (jsql->honeysql (.getFromItem obj)))
+
+      (some? (.getWhere obj))
+      (hsql.helpers/where query (jsql->honeysql (.getWhere obj))))))
 
 (m/defmethod jsql->honeysql ParenthesedSelect
   [^PlainSelect obj]
@@ -155,7 +167,9 @@
   [^ExistsExpression obj]
   (maybe-wrap-vector [:exists (jsql->honeysql (.getRightExpression obj))]))
 
-
+(m/defmethod jsql->honeysql InExpression
+  [^InExpression obj]
+  [:in (jsql->honeysql (.getLeftExpression obj)) (jsql->honeysql (.getRightExpression obj))])
 
 ;; TODO: not really sure what's the use case here
 #_(m/defmethod jsql->honeysql JdbcParameter
@@ -186,3 +200,12 @@
     (format "select * from u where exists (select id from u where id > 10)"))
   (catch Exception e
     e)))
+
+(defmacro condas->
+  "A mixture of cond-> and as-> allowing more flexibility in the test and step forms"
+  [expr name & clauses]
+  (assert (even? (count clauses)))
+  (let [pstep (fn [[test step]] `(if ~test ~step ~name))]
+    `(let [~name ~expr
+           ~@(interleave (repeat name) (map pstep (partition 2 clauses)))]
+       ~name)))
