@@ -20,7 +20,9 @@
    (net.sf.jsqlparser.expression.operators.relational
     Between
     ExistsExpression
-    InExpression)
+    IsBooleanExpression
+    InExpression
+    IsNullExpression)
    (net.sf.jsqlparser.parser CCJSqlParserUtil)
    (net.sf.jsqlparser.schema
     Column
@@ -167,9 +169,17 @@
   [^ExistsExpression obj]
   (maybe-wrap-vector [:exists (jsql->honeysql (.getRightExpression obj))]))
 
+(m/defmethod jsql->honeysql IsBooleanExpression
+  [^IsBooleanExpression obj]
+  [(if (.isNot obj) :is-not :is) (jsql->honeysql (.getLeftExpression obj)) (.isTrue obj)])
+
 (m/defmethod jsql->honeysql InExpression
   [^InExpression obj]
   [:in (jsql->honeysql (.getLeftExpression obj)) (jsql->honeysql (.getRightExpression obj))])
+
+(m/defmethod jsql->honeysql IsNullExpression
+  [^IsNullExpression obj]
+  [(if (.isNot obj) :is-not :is) (jsql->honeysql (.getLeftExpression obj)) nil])
 
 ;; TODO: not really sure what's the use case here
 #_(m/defmethod jsql->honeysql JdbcParameter
@@ -195,9 +205,12 @@
  (clojure.tools.trace/trace-ns *ns*)
  (m/remove-all-methods! #'jsql->honeysql)
 
+ (hsql/format {:select [:*]
+               :from   [:u]
+               :where  [:is-not :id nil]})
  (try
   (binding [*debug* true]
-    (format "select * from u where exists (select id from u where id > 10)"))
+    (format ""))
   (catch Exception e
     e)))
 
