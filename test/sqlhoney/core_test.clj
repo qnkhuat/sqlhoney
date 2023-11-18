@@ -123,8 +123,7 @@
     (test-format "select * from u where id is NULL" [:is :id nil] :where)
     (test-format "select * from u where id is not NULL" [:is-not :id nil] :where)
     (test-format "select * from u where id is true" [:is :id true] :where)
-    (test-format "select * from u where id is not false" [:is-not :id false] :where)
-    (test-format "select * from u where id is 1" [:is-not :id false] :where))
+    (test-format "select * from u where id is not false" [:is-not :id false] :where))
 
   (testing "binary expression in select returns 3 layers vector"
     (test-format "select 1 + 1" [[[:+ 1 1]]] :select))

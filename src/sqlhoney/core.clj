@@ -35,6 +35,7 @@
     PlainSelect)))
 
 (def ^:dynamic *debug* false)
+
 (def ^{:dynamic true
        :private true
        :doc     "Used to track indentation for debugging purposes"}
@@ -47,8 +48,6 @@
   nil)
 
 (m/defmulti jsql->honeysql class)
-
-(declare condas->)
 
 (defn- maybe-alias
   "Alias hsql-form if `obj` has an alias"
@@ -84,17 +83,16 @@
   [^Select obj]
   ;; make sure binding is nil to starts with for nested cases
   (binding [*context* nil]
-    #_{:clj-kondo/ignore [:unresolved-symbol]}
-    (condas-> {} query
+    (cond-> {}
       (some? (.getSelectItems obj))
-      (binding [*context* :select]
-        (apply hsql.helpers/select query (map jsql->honeysql (.getSelectItems obj))))
+      (#(binding [*context* :select]
+          (apply hsql.helpers/select % (map jsql->honeysql (.getSelectItems obj)))))
 
       (some? (.getFromItem obj))
-      (hsql.helpers/from query (jsql->honeysql (.getFromItem obj)))
+      (hsql.helpers/from (jsql->honeysql (.getFromItem obj)))
 
       (some? (.getWhere obj))
-      (hsql.helpers/where query (jsql->honeysql (.getWhere obj))))))
+      (hsql.helpers/where (jsql->honeysql (.getWhere obj))))))
 
 (m/defmethod jsql->honeysql ParenthesedSelect
   [^PlainSelect obj]
@@ -213,12 +211,3 @@
     (format ""))
   (catch Exception e
     e)))
-
-(defmacro condas->
-  "A mixture of cond-> and as-> allowing more flexibility in the test and step forms"
-  [expr name & clauses]
-  (assert (even? (count clauses)))
-  (let [pstep (fn [[test step]] `(if ~test ~step ~name))]
-    `(let [~name ~expr
-           ~@(interleave (repeat name) (map pstep (partition 2 clauses)))]
-       ~name)))
