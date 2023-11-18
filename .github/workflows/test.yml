@@ -14,7 +14,9 @@ jobs:
       uses: DeLaGuardo/setup-clj-kondo@afc83dbbf4e7e32e04649e29dbf30668d30e9e3e
       with:
         version: '2020.04.05'
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4.1.0
+    - name: ls
+      run: ls
     - name: Lint
       run: ./lint.sh
 
