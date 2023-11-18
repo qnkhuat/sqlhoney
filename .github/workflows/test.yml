@@ -15,8 +15,10 @@ jobs:
       with:
         version: '2020.04.05'
     - uses: actions/checkout@v4.1.0
-    - name: ls
-      run: ls
+    - name: Setup Clojure
+      uses: DeLaGuardo/setup-clojure@12.1
+      with:
+        cli: 1.11.1.1413
     - name: Lint
       run: ./lint.sh
 
