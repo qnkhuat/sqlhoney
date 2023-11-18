@@ -81,7 +81,7 @@
   (test-format "select * from u where ! id = 1" [:! [:= :id 1]] :where))
 
 (deftest binary-expression-test ;; net.sf.jsqlparser.expression
-  (testing "comparision"
+  (testing "comparison"
     (test-format "select * from u where id > 1" [:> :id 1] :where)
     (test-format "select * from u where id >= 1" [:>= :id 1] :where)
     (test-format "select * from u where id < 1" [:< :id 1] :where)
