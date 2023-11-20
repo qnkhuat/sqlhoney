@@ -1,4 +1,13 @@
 (ns sqlhoney.core-test
+  "The tests should be organized after the class hierarchy from
+  https://javadoc.io/static/com.github.jsqlparser/jsqlparser/4.7/overview-tree.html.
+
+  Rambling but I'm thinking, maybe we should structure the deftests after the classes because that's how we extend sqlhoney.
+
+  But From the classes, we should use the grammar graph[1] to define structure for testing.
+
+  [1]: https://jsqlparser.github.io/JSqlParser/syntax_snapshot.html
+  "
   (:require
    [clojure.test :refer [deftest is testing]]
    [environ.core :refer [env]]
@@ -37,44 +46,35 @@
                              (some? sub-paths#)
                              (get-in sub-paths#)))))))))
 
-(deftest simple-select-test
-  (testing "select all"
-    (test-format "select * from users"
-                 {:select [:*]
-                  :from   [:users]})
+;; https://javadoc.io/doc/com.github.jsqlparser/jsqlparser/latest/index.html
+(deftest jsqlparser.statement.select-test
+  (testing "AllColumns"
+    (test-format "select *"  [:*] :select)
+    (testing "AllTableColumns"
+      (test-format "select users.*" [:users.*] :select))
+    (testing "ForClause")
+    (testing "Function")
+    (testing "Join")
+    (testing "Limit")
+    (testing "Select"
+      ;; see to jsqlparser.statement.select.PlainSelect-test
+      (testing "PlainSelect"))))
 
-    (testing "from with alias"
-      (test-format "select * from users as u"
-                   {:select [:*]
-                    :from   [[:users :u]]})))
-
-  (testing "single select"
-    (test-format "select id from users"
-                 {:select [:id]
-                  :from   [:users]})
-
-    (testing "with alias"
-      (test-format "select first_name as fname from users"
-                   {:select [[:first_name :fname]]
-                    :from   [:users]})))
-
-  (testing "multiple select with alias"
-    (test-format "select id, first_name as fname from users as u"
-                 {:select [:id [:first_name :fname]]
-                  :from   [[:users :u]]})))
-
-(deftest select-expression-test
-  (testing "simple"
-    (test-format "select *" [:*] :select)
-    (test-format "select 1" [1] :select)
-    (test-format "select 1.5" [1.5] :select)
-    (test-format "select 1, 2" [1 2] :select)
-    (test-format "select 'a'" ["a"] :select)
-    (test-format "select 1 as a" [[1 :a]] :select)
-    ;; FIXME
-    #_(test-format "select true" [true] :select)
-    #_(test-format "select false" [false] :select)
-    (test-format "select null" [nil] :select)))
+(deftest jsqlparser.statement.select.PlainSelect-test
+  (testing "SelectItemsList"
+    (testing "SelectItem"
+      (test-format "select id" [:id] :select)
+      (test-format "select id, first_name as fname" [:id [:first_name :fname]] :select)
+      (test-format "select 1" [1] :select)
+      (test-format "select 1.5" [1.5] :select)
+      (test-format "select 1, 2" [1 2] :select)
+      (test-format "select 'a'" ["a"] :select)
+      (test-format "select 1 as a" [[1 :a]] :select)
+      (test-format "select true" [:true] :select)
+      (test-format "select false" [:false] :select)
+      (test-format "select null" [nil] :select)
+      (testing "with alias"
+        (test-format "select id as i" [[:id :i]] :select)))))
 
 (deftest unary-expression-test
   (test-format "select * from u where not id = 1" [:not [:= :id 1]] :where)

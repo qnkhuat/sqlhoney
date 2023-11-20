@@ -12,23 +12,22 @@
     LongValue
     StringValue
     Parenthesis
-    JdbcParameter
     NotExpression
     BinaryExpression)
-   (net.sf.jsqlparser.expression.operators.arithmetic
-    Addition)
    (net.sf.jsqlparser.expression.operators.relational
     Between
     ExistsExpression
     IsBooleanExpression
     InExpression
     IsNullExpression)
-   (net.sf.jsqlparser.parser CCJSqlParserUtil)
+   (net.sf.jsqlparser.parser
+    CCJSqlParserUtil)
    (net.sf.jsqlparser.schema
     Column
     Table)
    (net.sf.jsqlparser.statement.select
     AllColumns
+    AllTableColumns
     Select
     SelectItem
     ParenthesedSelect
@@ -79,6 +78,7 @@
   (throw (ex-info (clojure.core/format "No implementation for %s" (class obj)) {:obj obj})))
 
 ;; net.sf.jsqlparser.statement.select
+
 (m/defmethod jsql->honeysql Select
   [^Select obj]
   ;; make sure binding is nil to starts with for nested cases
@@ -101,6 +101,10 @@
 (m/defmethod jsql->honeysql AllColumns
   [^AllColumns _obj]
   :*)
+
+(m/defmethod jsql->honeysql AllTableColumns
+  [^AllTableColumns obj]
+  (keyword (clojure.core/format "%s.*" (.getTable obj))))
 
 (m/defmethod jsql->honeysql SelectItem
   [^SelectItem obj]
@@ -195,8 +199,11 @@
   (maybe-alias (keyword (.getName obj)) (.getAlias obj)))
 
 (defn format
-  [query]
-  (jsql->honeysql (CCJSqlParserUtil/parse query)))
+  ([query]
+   (format query false))
+  ([query debug?]
+   (binding [*debug* debug?]
+     (jsql->honeysql (CCJSqlParserUtil/parse query)))))
 
 (comment
  (use 'clojure.tools.trace)
